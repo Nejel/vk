@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import vk_api
-# import xlsxwriter
-# import time
-# import json
+import logging
+
+import xlsxwriter
+import time
+import json
 
 ## Глобальные переменные
 # max_counts = 1 #пока что не работает, потом пофикшу, сейчас задается на входе в функцию ниже
-login = 'логин_тут'
-password = 'тут_пароль'
+login = ''
+password = ''
+
+FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
+log_file = 'log.log'
 
 ## Некоторые сообщества и люди:
 bt = '-57536014'  # БТ
@@ -80,29 +85,32 @@ def main():
     второй параметр тут отвечает за количество запросов в вк через execute. 1 запрос = 25 постов.
     """
 
-    for i in wall["items"]:
-        if i["id"]:
-            try:
-                print("POST_ID: ", i['id'])  # , "TEXT: ", i['text']
-                comments = vk.wall.getComments(owner_id=active_scan, post_id=i['id'], need_likes=1)
-                print("Count of comments: ", comments['count'])
-                try:
-                    for ii in comments['items']:
-                        # print(ii['likes']['count'], ii['text'], ii['from_id'])
-                        usersandlikes = usersandlikes.append({'User': ii['from_id'],
-                                                              'Posts': i['id'],
-                                                              'Likes': ii['likes']['count'],
-                                                              'Text': ii['text']},
-                                                             ignore_index=True)
-                except:
-                    print("Не удалось получить комментарий, возможно он удален или что-то пошло не так. ПостID: ",
-                          i['id'])
-                # time.sleep(6)
-            except:
-                print("Не удалось получить пост")
-        else:
-            pass
-    # print("Type of usersandlikes ", type(usersandlikes))
+    def parse_post(post) -> list:
+        parsed_post = []
+        post_id = post['id']
+        comments = vk.wall.getComments(owner_id=active_scan, post_id=post_id, need_likes=1)
+        if comments is not None:
+            parsed_post += parse_comments(comments, post_id)
+        return parsed_post
+
+    def parse_comments(comments, post_id):
+        parsed_comments = []
+        for comment in comments['items']:
+            if 'from_id' in comment and 'likes' in comment and 'text' in comment:
+                parsed_comments.append({'User': comment['from_id'],
+                                        'Posts': post_id,
+                                        'Likes': comment['likes']['count'],
+                                        'Text': comment['text']})
+            else:
+                print("Не удалось получить комментарий, возможно он удален или что-то пошло не так. ПостID: ",
+                      post_id)
+                logging.warning(f'Unexpected exception. Id: {post_id}')
+        return parsed_comments
+
+    data = []
+    for post in wall["items"]:
+        data += parse_post(post)
+    usersandlikes = pd.DataFrame(data)
     print("Количество проанализированный комментариев", len(usersandlikes))
     result = groupbyusers(usersandlikes).reset_index()
     # print("Type of result ", type(result))
@@ -117,15 +125,22 @@ def main():
     return result
 
 
+
+
 def groupbyusers(usersandlikes):
-    ###
+    ### тут топ коментов наших юзеров с лайками этих комментов
     topcomment = usersandlikes.filter(items=['User', 'Likes', 'Text'])
     topcomment = topcomment.sort_values('Likes', ascending=False).drop_duplicates(['User'])
     topcomment = topcomment.filter(items=['User', 'Text', 'Likes'])
     topcomment = topcomment.rename(columns={"Likes": "Most_likeable_comment", "Text": "Comment_text"})
     print("top comments", len(topcomment))
-    ### Дописать тут функционал вывода самого залайканного комментария
-    ###
+
+    def get_top_comment(usersandlikes):
+        top_comments = usersandlikes.groupby('Text', as_index=False).aggregate({'Likes': 'count'}).sort_values(
+            'Likes')
+        return top_comments.loc[0]['Text'], top_comments.loc[0]['Likes']
+    top_1 = get_top_comment(usersandlikes)
+    print(f'Top 1 comment: {top_1[0]} with {top_1[1]} likes')
 
     usersandlikes2 = usersandlikes.filter(items=['User', 'Likes'])
     toplikers = usersandlikes2.groupby(['User']).sum()
@@ -151,9 +166,12 @@ def groupbyusers(usersandlikes):
 
 # toplikers = pd.DataFrame()
 if __name__ == '__main__':
+    logging.getLogger(log_file)
+    logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file)
     toplikers = main()
     # print(usersandlikes)
     # usersandlikes.to_csv('usersandlikes.csv', sep=';')
-    # print(toplikers)
+    print(toplikers.columns)
+    print(toplikers.head(1))
     toplikers.to_excel('toplikers.xlsx', sheet_name='Sheet_name_1', engine='xlsxwriter')
     # toplikers.to_csv('toplikers.csv', sep=';')
