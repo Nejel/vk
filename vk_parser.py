@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import vk_api
 import json
+from secrets import login, password
 
 def auth_handler():
     """ При двухфакторной аутентификации вызывается эта функция.
@@ -8,6 +9,7 @@ def auth_handler():
 
     # Код двухфакторной аутентификации
     key = input("Enter authentication code: ")
+    print('Accepted, Im working...')
     # Если: True - сохранить, False - не сохранять.
     remember_device = True
 
@@ -16,7 +18,6 @@ def auth_handler():
 def main():
     """ Пример получения всех постов со стены """
 
-    login, password = 'тут_логин', 'тут_пароль'
     vk_session = vk_api.VkApi(
         login, password,
         # функция для обработки двухфакторной аутентификации
@@ -51,7 +52,7 @@ def main():
         Для людей ставить впереди знаки "-" не нужно
     """
 
-    wall = tools.get_all('wall.get', 100, {'owner_id':-92767252})
+    wall = tools.get_all('wall.get', 100, {'owner_id':26546404})
 
     """
     Некоторые сообщества и люди: 

@@ -2,6 +2,7 @@
 import pandas as pd
 import vk_api
 import logging
+from secrets import login, password
 
 import xlsxwriter
 import time
@@ -9,8 +10,6 @@ import json
 
 ## Глобальные переменные
 # max_counts = 1 #пока что не работает, потом пофикшу, сейчас задается на входе в функцию ниже
-login = ''
-password = ''
 
 FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
 log_file = 'log.log'
