@@ -7,11 +7,16 @@ import pandas as pd
 import vk_api
 import logging
 from secrets import login, password
+
 '''
-MVP:
-1. Сходить ВК и забрать массив последних постов с их created_by
-2. Сложить в DF
-4. Залить получившийся результат в гугл-таблицу
+TODO:
+1. Проверять массив на наличие сломанных постов (возвращает 0 вместо редактора) +
+
+2. Выгружать уже залитую стату из гугл.шитов, смотреть какие посты там есть (записывать в df), 
+после этого в этот массив добавлять и обновлять новую статистику
+
+3. Получать также 20 первых букв текста поста и отправлять в гугл дерьмо
+
 '''
 
 # If modifying these scopes, delete the file token.pickle.
@@ -19,7 +24,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # The ID and range of a sample spreadsheet.
 SAMPLE_SPREADSHEET_ID = '1mz92-6l51z1wFyd0b1V2pnFK1mSkm3X3NfShG5vySG0'
-SAMPLE_RANGE_NAME = 'Sheet1!A2:E'
+SAMPLE_RANGE_NAME = 'Sheet1!A3:A'
 
 FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
 
@@ -31,8 +36,7 @@ mememe = '26546404'  # я сам
 jail = '-92767252'  # Подслушано в Тюрьме
 
 active_scan = bt
-count_of_executes = 3
-
+count_of_executes = 2
 
 
 def auth_handler():
@@ -97,16 +101,20 @@ def get_wall():
 
     return wall
 
+
 def parse_wall(wall):
     data = []
     for post in wall["items"]:
-        data.append(parse_post(post))
-    mydataframe = pd.DataFrame(data)#
+        try:
+            data.append(parse_post(post))
+        except:
+            pass
+    mydataframe = pd.DataFrame(data)  #
     mydataframe.fillna("0", inplace=True)
     return mydataframe
 
+
 def parse_post(post) -> list:
-    parsed_post = []
     try:
         post_id = post['id']
         created_by = post['created_by']
@@ -115,7 +123,7 @@ def parse_post(post) -> list:
         views = post['views']['count']
         parsed_post = [post_id, created_by, reposts, likes, views]
     except:
-        print('some exception')
+        print('There\'s no created_by or some other parameter is this post')
     return parsed_post
 
 
@@ -155,16 +163,18 @@ class Reporting():
                                     range=SAMPLE_RANGE_NAME).execute()
 
         values = result.get('values', [])
+        print("values", values)
 
         if not values:
             print('No data found.')
         else:
             # print('Name, Major:')
             for row in values:
+                print('All clear. Let\'s get the party started...', row)
                 # Print columns A and B, which correspond to indices 0 and 1.
-                print('%s, %s' % (row[0], row[1]))
+                # print('%s, %s' % (row[0], row[1]))
 
-        return creds
+        return creds, values
 
     def put(self, values, start_cell_idx, creds):
         value_range_body = {
@@ -188,8 +198,8 @@ class Reporting():
 if __name__ == '__main__':
     wall = get_wall()
     parsed = parse_wall(wall)
-    r = Reporting()
-    creds = r.main()
     df = parsed.values.tolist()
-    r.put(df, [2, 1], creds)
-
+    r = Reporting()
+    creds, postids_from_sheets = r.main()  # коннектимся к гугл-таблицам и читаем предыдущую статистику
+    # функция мерджа старой и новой статистики
+    r.put(df, [3, 1], creds)  # добавляем данные в лист Sheet1
