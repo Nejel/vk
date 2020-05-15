@@ -10,12 +10,7 @@ from secrets import login, password
 
 '''
 TODO:
-1. Проверять массив на наличие сломанных постов (возвращает 0 вместо редактора) +
-
-2. Выгружать уже залитую стату из гугл.шитов, смотреть какие посты там есть (записывать в df), 
-после этого в этот массив добавлять и обновлять новую статистику
-
-3. Получать также 20 первых букв текста поста и отправлять в гугл дерьмо
+1. Добавить таймдельту на последнюю неделю
 
 '''
 
@@ -24,7 +19,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # The ID and range of a sample spreadsheet.
 SAMPLE_SPREADSHEET_ID = '1mz92-6l51z1wFyd0b1V2pnFK1mSkm3X3NfShG5vySG0'
-SAMPLE_RANGE_NAME = 'Sheet1!A3:A'
+SAMPLE_RANGE_NAME = 'Sheet1!A3:F'
 
 FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
 
@@ -36,7 +31,7 @@ mememe = '26546404'  # я сам
 jail = '-92767252'  # Подслушано в Тюрьме
 
 active_scan = bt
-count_of_executes = 2
+count_of_executes = 8
 
 
 def auth_handler():
@@ -55,10 +50,6 @@ def get_wall():
     """ Пример получения всех комментариев к записям со стены и их ранжирования
     по сумме лайков на каждого пользователя"""
 
-    # usersandlikes = pd.DataFrame(columns=['User', 'Posts', 'Likes'])
-    # toplikers = pd.DataFrame(columns=['User', 'Likes'], index=None)
-
-    # login, password = login, password
     vk_session = vk_api.VkApi(
         login, password,
 
@@ -90,15 +81,10 @@ def get_wall():
         Обратите внимание, идентификатор сообщества в параметре owner_id 
         необходимо указывать со знаком "-" 
         — например, owner_id=-1 соответствует идентификатору сообщества ВКонтакте API (club1)
-        Для людей ставить впереди знаки "-" не нужно
-    """
+        Для людей ставить впереди знаки "-" не нужно    """
 
+    # второй параметр тут отвечает за количество запросов в вк через execute. 1 запрос = 25 постов.
     wall = tools.get_all('wall.get', count_of_executes, {'owner_id': active_scan}, limit=1)
-
-    """
-    второй параметр тут отвечает за количество запросов в вк через execute. 1 запрос = 25 постов.
-    """
-
     return wall
 
 
@@ -106,11 +92,13 @@ def parse_wall(wall):
     data = []
     for post in wall["items"]:
         try:
-            data.append(parse_post(post))
+            data.append(parse_post(post)) # only for post with created_by data
         except:
-            pass
+            print('Both ways to parse post were failed')
+
     mydataframe = pd.DataFrame(data)  #
-    mydataframe.fillna("0", inplace=True)
+    mydataframe.fillna(0, inplace=True)
+    mydataframe = mydataframe.values.tolist()
     return mydataframe
 
 
@@ -121,9 +109,19 @@ def parse_post(post) -> list:
         likes = post['likes']['count']
         reposts = post['reposts']['count']
         views = post['views']['count']
-        parsed_post = [post_id, created_by, reposts, likes, views]
+        text_of_post = post['text'][:20]
+        parsed_post = [post_id, created_by, reposts, likes, views, text_of_post]
     except:
         print('There\'s no created_by or some other parameter is this post')
+        try:
+            post_id = post['id']
+            likes = post['likes']['count']
+            reposts = post['reposts']['count']
+            views = post['views']['count']
+            text_of_post = post['text'][:20]
+            parsed_post = [post_id, 0, reposts, likes, views, text_of_post]
+        except:
+            print('Both ways to parse post were failed')
     return parsed_post
 
 
@@ -162,44 +160,82 @@ class Reporting():
         result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID,
                                     range=SAMPLE_RANGE_NAME).execute()
 
-        values = result.get('values', [])
-        print("values", values)
+        posts_from_sheets = result.get('values', [])
+        print("values from sheets", posts_from_sheets)
 
-        if not values:
+        if not posts_from_sheets:
             print('No data found.')
         else:
             # print('Name, Major:')
-            for row in values:
+            for row in posts_from_sheets:
                 print('All clear. Let\'s get the party started...', row)
-                # Print columns A and B, which correspond to indices 0 and 1.
-                # print('%s, %s' % (row[0], row[1]))
 
-        return creds, values
+        return creds, posts_from_sheets
 
-    def put(self, values, start_cell_idx, creds):
-        value_range_body = {
-            'majorDimension': 'ROWS',
-            'values': values}
 
-        RANGE = 'R%sC%s:R%sC%s' % (tuple(start_cell_idx) + \
-                                   tuple(pd.Series(start_cell_idx) + \
-                                         pd.Series((len(values),
-                                                    max(map(len, values))))))
-
+    def put(self, result):
         service = build('sheets', 'v4', credentials=creds)
-        sheet = service.spreadsheets()
-        request = sheet.values().update(spreadsheetId=SAMPLE_SPREADSHEET_ID,
-                                        range=RANGE,
-                                        valueInputOption='RAW',
-                                        body=value_range_body)
-        response = request.execute()
+        values = service.spreadsheets().values().batchUpdate(
+            spreadsheetId=SAMPLE_SPREADSHEET_ID,
+            body={
+                "valueInputOption": "USER_ENTERED",
+                "data": [
+                    {"range": "A3:F",
+                     "majorDimension":"ROWS",
+                     "values": result}
+                ]
+            }
+        ).execute()
+
+
+class Statistics_work():
+    """Takes postids_from_sheets as list and parsed as list
+    Merge new stats (parsed) to old one (posts_from_sheets)    """
+
+    def __init__(self):
+        pass
+
+    def compare(self, posts_from_sheets, parsed):
+        cols = ['postid', 'created_by', 'reposts', 'likes', 'views', 'text_of_post']
+        df_with_parsed = pd.DataFrame(parsed, columns=cols, dtype=int)
+        df_with_from_sheet = pd.DataFrame(posts_from_sheets, columns=cols, dtype=int)
+        df_with_from_sheet = df_with_from_sheet.iloc[:, 0:2]
+        cols_to_merge = [0,2,3,4,5]
+        df_with_parsed_to_merge = df_with_parsed.iloc[:,cols_to_merge]
+        df_with_from_sheet['postid'] = df_with_from_sheet['postid'].astype('int32')
+        df_with_from_sheet['created_by'] = df_with_from_sheet['created_by'].astype('int32')
+        frames = [df_with_parsed, df_with_from_sheet]
+        key = ['postid']
+
+        # Объединим новые данные о лайках со старыми авторами
+        result = pd.concat(frames).groupby(key, as_index=False)['created_by'].max()
+        # И вернем сюда данные о лайках, репостах, просмотрах
+        result = pd.merge(result, df_with_parsed_to_merge, how='inner', on=key, left_on=None, right_on=None,
+                 left_index=False, right_index=False, sort=False,
+                 suffixes=('_x', '_y'), copy=True, indicator=False,
+                 validate=None)
+
+        result = result.sort_values(by=['postid'], ascending=False)
+        # take_smaller = lambda s1, s2: s1 if s1.sum() < s2.sum() else s2
+        # result = df_with_parsed.combine(df_with_from_sheet, take_smaller)
+
+        print("result!!! \n", result.head(50))
+        result = result.values.tolist()
+        """
+        frames = [df_with_parsed, df_with_from_sheet]
+        result = pd.concat(frames)
+        result = result.groupby(['postid', 'created_by']).max()
+        # df_with_parsed = df_with_parsed.loc[df.Weight == "155", "Name"] = "John"
+        """
+        return result
 
 
 if __name__ == '__main__':
     wall = get_wall()
     parsed = parse_wall(wall)
-    df = parsed.values.tolist()
     r = Reporting()
-    creds, postids_from_sheets = r.main()  # коннектимся к гугл-таблицам и читаем предыдущую статистику
-    # функция мерджа старой и новой статистики
-    r.put(df, [3, 1], creds)  # добавляем данные в лист Sheet1
+    creds, posts_from_sheets = r.main() # коннектимся к гугл-таблицам и читаем предыдущую статистику
+    s = Statistics_work()
+    result = s.compare(posts_from_sheets, parsed)
+    # result.to_csv('test.csv', sep=';')
+    r.put(result)
