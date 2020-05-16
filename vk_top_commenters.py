@@ -35,7 +35,7 @@ def auth_handler():
     return key, remember_device
 
 
-def main():
+def parse_wall():
     """ Пример получения всех комментариев к записям со стены и их ранжирования
     по сумме лайков на каждого пользователя"""
 
@@ -69,7 +69,6 @@ def main():
         100 - максимальное количество постов, которое можно получить за один
         запрос (обычно написано на странице с описанием метода)
 
-
         https://vk.com/dev/wall.get
 
         Обратите внимание, идентификатор сообщества в параметре owner_id 
@@ -83,45 +82,46 @@ def main():
     """
     второй параметр тут отвечает за количество запросов в вк через execute. 1 запрос = 25 постов.
     """
-
-    def parse_post(post) -> list:
-        parsed_post = []
-        post_id = post['id']
-        comments = vk.wall.getComments(owner_id=active_scan, post_id=post_id, need_likes=1)
-        if comments is not None:
-            parsed_post += parse_comments(comments, post_id)
-        return parsed_post
-
-    def parse_comments(comments, post_id):
-        parsed_comments = []
-        for comment in comments['items']:
-            if 'from_id' in comment and 'likes' in comment and 'text' in comment:
-                parsed_comments.append({'User': comment['from_id'],
-                                        'Posts': post_id,
-                                        'Likes': comment['likes']['count'],
-                                        'Text': comment['text']})
-            else:
-                print("Не удалось получить комментарий, возможно он удален или что-то пошло не так. ПостID: ",
-                      post_id)
-                logging.warning(f'Unexpected exception. Id: {post_id}')
-        return parsed_comments
-
     data = []
     for post in wall["items"]:
-        data += parse_post(post)
+        data += parse_post(post, vk)
     usersandlikes = pd.DataFrame(data)
-    print("Количество проанализированный комментариев", len(usersandlikes))
+    print("Количество проанализированных комментариев", len(usersandlikes))
     result = groupbyusers(usersandlikes).reset_index()
+
     # print("Type of result ", type(result))
-
     # result['LinkToUser'] = "https://vk.com/id"+result['User'].astype(str)
-
     # result.rename(columns=result.iloc[:;0])
     # result.reindex(axis=0)
     result.iloc[:, 1] = "https://vk.com/id" + result.iloc[:, 1].astype(str)
     print(result.head(20))
 
-    return result
+    return result, vk
+
+def parse_post(post, vk) -> list:
+    parsed_post = []
+    post_id = post['id']
+    comments = vk.wall.getComments(owner_id=active_scan, post_id=post_id, need_likes=1)
+    if comments is not None:
+        parsed_post += parse_comments(comments, post_id)
+    return parsed_post
+
+def parse_comments(comments, post_id):
+    parsed_comments = []
+    for comment in comments['items']:
+        if 'from_id' in comment and 'likes' in comment and 'text' in comment:
+            parsed_comments.append({'User': comment['from_id'],
+                                    'Posts': post_id,
+                                    'Likes': comment['likes']['count'],
+                                    'Text': comment['text']})
+        else:
+            print("test-syyyyt")
+            print("Не удалось получить комментарий, возможно он удален или что-то пошло не так. ПостID: ",
+                  post_id)
+            logging.warning(f'Unexpected exception. Id: {post_id}')
+    return parsed_comments
+
+
 
 
 
@@ -167,7 +167,7 @@ def groupbyusers(usersandlikes):
 if __name__ == '__main__':
     logging.getLogger(log_file)
     logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file)
-    toplikers = main()
+    toplikers, vk = parse_wall()
     # print(usersandlikes)
     # usersandlikes.to_csv('usersandlikes.csv', sep=';')
     print(toplikers.columns)
