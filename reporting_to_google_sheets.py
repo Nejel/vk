@@ -8,9 +8,14 @@ import vk_api
 import logging
 from secrets import login, password
 
+import time
+t = 3600 #sec
+
 '''
 TODO:
 1. Добавить таймдельту на последнюю неделю
+2. Поправить авторизацию через OAuth2
+3. Добавить новые статистики (?)
 
 '''
 
@@ -18,7 +23,7 @@ TODO:
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # The ID and range of a sample spreadsheet.
-SAMPLE_SPREADSHEET_ID = '1mz92-6l51z1wFyd0b1V2pnFK1mSkm3X3NfShG5vySG0'
+SAMPLE_SPREADSHEET_ID = '1gB5ycG0ts7vJgM3g9fL8RsR_PU8rEFk-Rns5Vec4ezo'
 SAMPLE_RANGE_NAME = 'Sheet1!A3:F'
 
 FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
@@ -112,7 +117,7 @@ def parse_post(post) -> list:
         text_of_post = post['text'][:20]
         parsed_post = [post_id, created_by, reposts, likes, views, text_of_post]
     except:
-        print('There\'s no created_by or some other parameter is this post')
+        # print('There\'s no created_by or some other parameter is this post')
         try:
             post_id = post['id']
             likes = post['likes']['count']
@@ -147,7 +152,7 @@ class Reporting():
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
+                    'credentials2.json', SCOPES)
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
             with open('token.pickle', 'wb') as token:
@@ -161,15 +166,15 @@ class Reporting():
                                     range=SAMPLE_RANGE_NAME).execute()
 
         posts_from_sheets = result.get('values', [])
-        print("values from sheets", posts_from_sheets)
+        # print("values from sheets", posts_from_sheets)
 
         if not posts_from_sheets:
             print('No data found.')
         else:
             # print('Name, Major:')
             for row in posts_from_sheets:
-                print('All clear. Let\'s get the party started...', row)
-
+                # print('All clear. Let\'s get the party started...', row)
+                pass
         return creds, posts_from_sheets
 
 
@@ -219,7 +224,7 @@ class Statistics_work():
         # take_smaller = lambda s1, s2: s1 if s1.sum() < s2.sum() else s2
         # result = df_with_parsed.combine(df_with_from_sheet, take_smaller)
 
-        print("result!!! \n", result.head(50))
+        # print("result!!! \n", result.head(50))
         result = result.values.tolist()
         """
         frames = [df_with_parsed, df_with_from_sheet]
@@ -231,11 +236,14 @@ class Statistics_work():
 
 
 if __name__ == '__main__':
-    wall = get_wall()
-    parsed = parse_wall(wall)
-    r = Reporting()
-    creds, posts_from_sheets = r.main() # коннектимся к гугл-таблицам и читаем предыдущую статистику
-    s = Statistics_work()
-    result = s.compare(posts_from_sheets, parsed)
-    # result.to_csv('test.csv', sep=';')
-    r.put(result)
+    for i in range (1,100):
+        wall = get_wall()
+        parsed = parse_wall(wall)
+        r = Reporting()
+        creds, posts_from_sheets = r.main() # коннектимся к гугл-таблицам и читаем предыдущую статистику
+        s = Statistics_work()
+        result = s.compare(posts_from_sheets, parsed)
+        # result.to_csv('test.csv', sep=';')
+        r.put(result)
+        print("All right, me sleep for 1 hour...")
+        time.sleep(t)
