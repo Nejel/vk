@@ -251,7 +251,7 @@ class Reporting:
             body={
                 "valueInputOption": "USER_ENTERED",
                 "data": [
-                    {"range": "E1:G1",
+                    {"range": "Sheet1!E1:G1",
                      "majorDimension":"ROWS",
                      "values": [stringest]}
                 ]
