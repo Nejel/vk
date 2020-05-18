@@ -128,30 +128,38 @@ def parse_post(post) -> list:
             print('Both ways to parse post were failed')
     return parsed_post
 
+def chunk(lst, n):
+    for i in range (0, len(lst),n):
+        yield lst[i:i+n]
+
 
 def supply_post_with_more_data(vk_session, postids):
-    postids = postids[:30]
+    chunks = chunk(postids, 30)
+
+
+    # postids = postids[:30]
     vk = vk_session.get_api()
-    posts_enriched = vk.stats.getPostReach(owner_id=active_scan, post_ids=postids)
     parsed_post = []
-    for post in posts_enriched:
-        try:
-            post_id = post['post_id']
-            hide = post['hide']
-            join_group = post['join_group']
-            links = post['links']
-            reach_subscribers = post['reach_subscribers']
-            to_group = post['to_group']
-            reach_viral = post['reach_viral']
-            report = post['report']
-            unsubscribe = post['unsubscribe']
-            listoffeatures = [post_id, hide, join_group, links, reach_subscribers, to_group, reach_viral, report, unsubscribe]
-            parsed_post.append(listoffeatures)
-        except:
+    for postids_group in chunks:
+        posts_enriched = vk.stats.getPostReach(owner_id=active_scan, post_ids=postids_group)
+        for post in posts_enriched:
             try:
-                print("cannot add posts_enriched features for post: ", post['post_id'])
+                post_id = post['post_id']
+                hide = post['hide']
+                join_group = post['join_group']
+                links = post['links']
+                reach_subscribers = post['reach_subscribers']
+                to_group = post['to_group']
+                reach_viral = post['reach_viral']
+                report = post['report']
+                unsubscribe = post['unsubscribe']
+                listoffeatures = [post_id, hide, join_group, links, reach_subscribers, to_group, reach_viral, report, unsubscribe]
+                parsed_post.append(listoffeatures)
             except:
-                print("cannot add post_enriched features and even take post_id from list postids")
+                try:
+                    print("cannot add posts_enriched features for post: ", post['post_id'])
+                except:
+                    print("cannot add post_enriched features and even take post_id from list postids")
     return parsed_post
 
 
@@ -280,23 +288,23 @@ class Statistics_work():
 
 
 if __name__ == '__main__':
-    for i in range (1, 3):
-        vk_session = get_session()
-        wall, tools = get_wall(vk_session)
-        parsed, postids = parse_wall(wall)
-        print("parsed VK is ok")
+    # for i in range (1, 3):
+    vk_session = get_session()
+    wall, tools = get_wall(vk_session)
+    parsed, postids = parse_wall(wall)
+    print("parsed VK is ok")
 
-        morefeatures = supply_post_with_more_data(vk_session, postids)
-        print("parsed additional data from VK is ok")
+    morefeatures = supply_post_with_more_data(vk_session, postids)
+    print("parsed additional data from VK is ok")
 
-        r = Reporting()
-        creds, posts_from_sheets = r._main()
+    r = Reporting()
+    creds, posts_from_sheets = r._main()
 
-        print("parsed GS is ok")
-        s = Statistics_work()
-        result = s.compare(posts_from_sheets, parsed, morefeatures)
-        r.put(result)
-        r.put_last_updated()
+    print("parsed GS is ok")
+    s = Statistics_work()
+    result = s.compare(posts_from_sheets, parsed, morefeatures)
+    r.put(result)
+    r.put_last_updated()
 
-        print("All right, me sleep for 1 hour...", datetime.now()+sevenhours)
-        time.sleep(t)
+    print("All right, process is over at", datetime.now()+sevenhours)
+        # time.sleep(t)
