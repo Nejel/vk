@@ -7,21 +7,16 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import pandas as pd
 import vk_api
-import logging
-from secrets import login, password
+from secrets import login, password, sheet_id, delta
 
-import tzlocal
-import time
 from datetime import datetime, date, timedelta
-# from datetime import timedelta
+
 week = timedelta(weeks=1)
-sevenhours = timedelta(hours=7)
-t = 3600 #sec
 
 '''
 #TODO 
 1. Fix OAuth2
-2. Quantity of comments
+
 
 '''
 
@@ -29,8 +24,8 @@ t = 3600 #sec
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # The ID and range of a sample spreadsheet.
-SAMPLE_SPREADSHEET_ID = '1xZXg3o88qFKR1M9qOUtTTzE7AsZ_i_fyZNut8EOfyEc'
-SAMPLE_RANGE_NAME = 'Sheet1!A3:G'
+spreadsheet_id = sheet_id
+range_name = 'Sheet1!A3:H'
 
 FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
 
@@ -108,9 +103,10 @@ def parse_post(post) -> list:
         text_of_post = post['text'][:20]
         postdate = post['date']
         unix_timestamp = float(postdate)
+        count_of_comments = post['comments']['count']
         #local_timezone = tzlocal.get_localzone()  # get pytz timezone
-        local_time = datetime.fromtimestamp(unix_timestamp) + sevenhours #local_timezone
-        parsed_post = [post_id, created_by, reposts, likes, views, text_of_post, local_time]
+        local_time = datetime.fromtimestamp(unix_timestamp) + delta
+        parsed_post = [post_id, created_by, reposts, likes, views, text_of_post, local_time, count_of_comments]
     except:
         # print('There\'s no created_by or some other parameter is this post')
         try:
@@ -121,9 +117,10 @@ def parse_post(post) -> list:
             text_of_post = post['text'][:20]
             postdate = post['date'] #unix timestamp
             unix_timestamp = float(postdate)
+            count_of_comments = post['comments']['count']
             #local_timezone = tzlocal.get_localzone()  # get pytz timezone
-            local_time = datetime.fromtimestamp(unix_timestamp) + sevenhours
-            parsed_post = [post_id, 0, reposts, likes, views, text_of_post, local_time]
+            local_time = datetime.fromtimestamp(unix_timestamp) + delta
+            parsed_post = [post_id, 0, reposts, likes, views, text_of_post, local_time, count_of_comments]
         except:
             print('Both ways to parse post were failed')
     return parsed_post
@@ -135,9 +132,6 @@ def chunk(lst, n):
 
 def supply_post_with_more_data(vk_session, postids):
     chunks = chunk(postids, 30)
-
-
-    # postids = postids[:30]
     vk = vk_session.get_api()
     parsed_post = []
     for postids_group in chunks:
@@ -195,8 +189,8 @@ class Reporting:
 
         # Call the Sheets API
         sheet = service.spreadsheets()
-        result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID,
-                                    range=SAMPLE_RANGE_NAME).execute()
+        result = sheet.values().get(spreadsheetId=spreadsheet_id,
+                                    range=range_name).execute()
 
         posts_from_sheets = result.get('values', [])
 
@@ -210,11 +204,11 @@ class Reporting:
     def put(self, result):
         service = build('sheets', 'v4', credentials=creds)
         values = service.spreadsheets().values().batchUpdate(
-            spreadsheetId=SAMPLE_SPREADSHEET_ID,
+            spreadsheetId=spreadsheet_id,
             body={
                 "valueInputOption": "USER_ENTERED",
                 "data": [
-                    {"range": "Sheet1!A3:O",
+                    {"range": "Sheet1!A3:P",
                      "majorDimension":"ROWS",
                      "values": result}
                 ]
@@ -222,13 +216,13 @@ class Reporting:
         ).execute()
 
     def put_last_updated(self):
-        server_fixed_time = datetime.now() + sevenhours
+        server_fixed_time = datetime.now() + delta
         d = str(datetime.date(server_fixed_time))
         t = str(datetime.time(server_fixed_time))
         stringest = ['Last Updated:', d, t]
         service = build('sheets', 'v4', credentials=creds)
         values = service.spreadsheets().values().batchUpdate(
-            spreadsheetId=SAMPLE_SPREADSHEET_ID,
+            spreadsheetId=spreadsheet_id,
             body={
                 "valueInputOption": "USER_ENTERED",
                 "data": [
@@ -248,7 +242,7 @@ class Statistics_work():
 
     def compare(self, posts_from_sheets, parsed, morefeatures):
 
-        cols = ['postid', 'created_by', 'reposts', 'likes', 'views', 'text_of_post', 'datetimeofpost']
+        cols = ['postid', 'created_by', 'reposts', 'likes', 'views', 'text_of_post', 'datetimeofpost', 'count_of_comments']
         df_with_parsed = pd.DataFrame(parsed, columns=cols, dtype=int)
         df_with_from_sheet = pd.DataFrame(posts_from_sheets, columns=cols, dtype=int)
 
@@ -256,7 +250,7 @@ class Statistics_work():
         df_morefeatures = pd.DataFrame(morefeatures, columns=morecolumns, dtype=int)
 
         df_with_from_sheet = df_with_from_sheet.iloc[:, 0:2]
-        cols_to_merge = [0,2,3,4,5,6]
+        cols_to_merge = [0,2,3,4,5,6,7]
         df_with_parsed_to_merge = df_with_parsed.iloc[:,cols_to_merge]
 
         df_with_from_sheet['postid'] = df_with_from_sheet['postid'].astype('int32') # maybe is not needed anymore
@@ -306,5 +300,5 @@ if __name__ == '__main__':
     r.put(result)
     r.put_last_updated()
 
-    print("All right, process is over at", datetime.now()+sevenhours)
+    print("All right, process is over at", datetime.now() + delta)
         # time.sleep(t)
