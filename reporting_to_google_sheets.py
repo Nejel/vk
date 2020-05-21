@@ -88,7 +88,8 @@ def parse_wall(wall):
     ## here filtering by timedelta
     today = datetime.today()
     weekago = today - week
-    mydataframe = mydataframe[mydataframe[6] > weekago]
+    twoweeksago = today - week - week
+    mydataframe = mydataframe[mydataframe[6] > twoweeksago]
     mydataframe = mydataframe.values.tolist()
     return mydataframe, postids
 
