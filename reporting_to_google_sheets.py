@@ -2,6 +2,7 @@
 
 import pickle
 import os.path
+import logging
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -27,9 +28,9 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 spreadsheet_id = sheet_id
 range_name = 'Sheet1!A3:H'
 
+# Logging
 FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
-
-log_file = 'log.log'
+log_file = 'google_reporting.log'
 
 bt = '-57536014'
 mememe = '26546404'
@@ -60,7 +61,8 @@ def get_session():
     try:
         vk_session.auth(token_only=True)
     except vk_api.AuthError as error_msg:
-        print(error_msg)
+        # print(error_msg)
+        logging.error(error_msg)
     return vk_session
 
 
@@ -80,7 +82,8 @@ def parse_wall(wall):
         try:
             data.append(parse_post(post)) # only for post with created_by data
         except:
-            print('Both ways to parse post were failed')
+            # print('Both ways to parse post were failed')
+            logging.error('Post parsing failed with 2 ways')
 
     mydataframe = pd.DataFrame(data)  #
     mydataframe.fillna(0, inplace=True)
@@ -88,7 +91,8 @@ def parse_wall(wall):
     ## here filtering by timedelta
     today = datetime.today()
     weekago = today - week
-    mydataframe = mydataframe[mydataframe[6] > weekago]
+    twoweeksago = today - week - week
+    mydataframe = mydataframe[mydataframe[6] > twoweeksago]
     mydataframe = mydataframe.values.tolist()
     return mydataframe, postids
 
@@ -107,8 +111,9 @@ def parse_post(post) -> list:
         #local_timezone = tzlocal.get_localzone()  # get pytz timezone
         local_time = datetime.fromtimestamp(unix_timestamp) + delta
         parsed_post = [post_id, created_by, reposts, likes, views, text_of_post, local_time, count_of_comments]
-    except:
+    except Exception as e:
         # print('There\'s no created_by or some other parameter is this post')
+        logging.error(e)
         try:
             post_id = post['id']
             likes = post['likes']['count']
@@ -122,7 +127,8 @@ def parse_post(post) -> list:
             local_time = datetime.fromtimestamp(unix_timestamp) + delta
             parsed_post = [post_id, 0, reposts, likes, views, text_of_post, local_time, count_of_comments]
         except:
-            print('Both ways to parse post were failed')
+            logging.error('Post parsing failed with 2 ways')
+            # print('Both ways to parse post were failed')
     return parsed_post
 
 def chunk(lst, n):
@@ -151,9 +157,11 @@ def supply_post_with_more_data(vk_session, postids):
                 parsed_post.append(listoffeatures)
             except:
                 try:
-                    print("cannot add posts_enriched features for post: ", post['post_id'])
+                    # print("cannot add posts_enriched features for post: ", post['post_id'])
+                    logging.error(f'cannot add posts_enriched features for post {post["post_id"]}')
                 except:
-                    print("cannot add post_enriched features and even take post_id from list postids")
+                    logging.error(f'post_enriched features failed while taking post_id from list postids')
+                    # print("cannot add post_enriched features and even take post_id from list postids")
     return parsed_post
 
 
@@ -195,13 +203,14 @@ class Reporting:
         posts_from_sheets = result.get('values', [])
 
         if not posts_from_sheets:
-            print('No data found.')
+            # print('No data found.')
+            logging.info(f'Failed to find posts in sheet {spreadsheet_id}')
         else:
             pass
         return creds, posts_from_sheets
 
-
-    def put(self, result):
+    @staticmethod
+    def put(result):
         service = build('sheets', 'v4', credentials=creds)
         values = service.spreadsheets().values().batchUpdate(
             spreadsheetId=spreadsheet_id,
@@ -215,7 +224,8 @@ class Reporting:
             }
         ).execute()
 
-    def put_last_updated(self):
+    @staticmethod
+    def put_last_updated():
         server_fixed_time = datetime.now() + delta
         d = str(datetime.date(server_fixed_time))
         t = str(datetime.time(server_fixed_time))
@@ -240,7 +250,8 @@ class Statistics_work():
     def __init__(self):
         pass
 
-    def compare(self, posts_from_sheets, parsed, morefeatures):
+    @staticmethod
+    def compare(posts_from_sheets, parsed, morefeatures):
 
         cols = ['postid', 'created_by', 'reposts', 'likes', 'views', 'text_of_post', 'datetimeofpost', 'count_of_comments']
         df_with_parsed = pd.DataFrame(parsed, columns=cols, dtype=int)
@@ -282,23 +293,29 @@ class Statistics_work():
 
 
 if __name__ == '__main__':
+    logger = logging.getLogger(log_file)
+    logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file)
+
     # for i in range (1, 3):
     vk_session = get_session()
     wall, tools = get_wall(vk_session)
     parsed, postids = parse_wall(wall)
-    print("parsed VK is ok")
+    logger.info('VK parsed successfully')
+    # print("parsed VK is ok")
 
     morefeatures = supply_post_with_more_data(vk_session, postids)
-    print("parsed additional data from VK is ok")
+    logger.info('Additional VK data parsed successfully')
+    # print("parsed additional data from VK is ok")
 
     r = Reporting()
     creds, posts_from_sheets = r._main()
 
-    print("parsed GS is ok")
+    logger.info('Google Sheets parsed successfully')
+    # print("parsed GS is ok")
     s = Statistics_work()
     result = s.compare(posts_from_sheets, parsed, morefeatures)
     r.put(result)
     r.put_last_updated()
-
-    print("All right, process is over at", datetime.now() + delta)
-        # time.sleep(t)
+    logger.info(f'Process finished at {datetime.now() + delta}')
+    # print("All right, process is over at", datetime.now() + delta)
+    # time.sleep(t)
