@@ -158,9 +158,9 @@ def supply_post_with_more_data(vk_session, postids):
             except:
                 try:
                     # print("cannot add posts_enriched features for post: ", post['post_id'])
-                    logging.error(f'cannot add posts_enriched features for post {post["post_id"]}')
+                    logging.error('cannot add posts_enriched features for post {post["post_id"]}')
                 except:
-                    logging.error(f'post_enriched features failed while taking post_id from list postids')
+                    logging.error('post_enriched features failed while taking post_id from list postids')
                     # print("cannot add post_enriched features and even take post_id from list postids")
     return parsed_post
 
@@ -204,7 +204,7 @@ class Reporting:
 
         if not posts_from_sheets:
             # print('No data found.')
-            logging.info(f'Failed to find posts in sheet {spreadsheet_id}')
+            logging.info('Failed to find posts in sheet')
         else:
             pass
         return creds, posts_from_sheets
@@ -316,6 +316,6 @@ if __name__ == '__main__':
     result = s.compare(posts_from_sheets, parsed, morefeatures)
     r.put(result)
     r.put_last_updated()
-    logger.info(f'Process finished at {datetime.now() + delta}')
+    logger.info('Process finished at {datetime.now() + delta}')
     # print("All right, process is over at", datetime.now() + delta)
     # time.sleep(t)

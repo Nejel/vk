@@ -1,0 +1,7 @@
+python = 3.5
+pickle
+pandas
+google-api-core >= 1.17.0
+google-api-python-client >= 1.8.3
+google-auth >= 1.11.3
+vk-api >= 11.8.0
