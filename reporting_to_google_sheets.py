@@ -318,4 +318,4 @@ if __name__ == '__main__':
     r.put_last_updated()
     logger.info(f'Process finished at {datetime.now() + delta}')
     # print("All right, process is over at", datetime.now() + delta)
-        # time.sleep(t)
+    # time.sleep(t)
