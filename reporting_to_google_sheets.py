@@ -1,28 +1,28 @@
 # -*- coding: utf-8 -*-
 
-import pickle
-import os.path
 import logging
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+import httplib2
+from oauth2client.service_account import ServiceAccountCredentials
+import apiclient.discovery
 import pandas as pd
 import vk_api
-from secrets import login, password, sheet_id, delta
+from secrets import login, password, sheet_id
+from datetime import datetime, timedelta
 
-from datetime import datetime, date, timedelta
 
+# Define timedeltas:
+from secrets import delta # 1 sec at local machine and 7 hours at productive stage
+today = datetime.today()
 week = timedelta(weeks=1)
-
-'''
-#TODO 
-1. Fix OAuth2
-
-
-'''
+twoweeksago = today - week - week
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+
+# CREDENTIALS TO SERVICE ACC
+CREDSTOSERVICE = 'credentials.json'
+
 
 # The ID and range of a sample spreadsheet.
 spreadsheet_id = sheet_id
@@ -41,36 +41,27 @@ count_of_executes = 5
 
 
 def auth_handler():
-    """
-    """
-
     key = input("Enter authentication code: ")
     remember_device = True
-
     return key, remember_device
-
 
 
 def get_session():
     vk_session = vk_api.VkApi(
         login, password,
-
-        auth_handler=auth_handler
-    )
+        auth_handler=auth_handler)
 
     try:
         vk_session.auth(token_only=True)
     except vk_api.AuthError as error_msg:
-        # print(error_msg)
-        logging.error(error_msg)
+        pass
+        # logging.error(error_msg)
     return vk_session
 
 
 def get_wall(vk_session):
-
     tools = vk_api.VkTools(vk_session)
     wall = tools.get_all('wall.get', count_of_executes, {'owner_id': active_scan}, limit=1)
-
     return wall, tools
 
 
@@ -82,16 +73,13 @@ def parse_wall(wall):
         try:
             data.append(parse_post(post)) # only for post with created_by data
         except:
-            # print('Both ways to parse post were failed')
             logging.error('Post parsing failed with 2 ways')
 
     mydataframe = pd.DataFrame(data)  #
     mydataframe.fillna(0, inplace=True)
 
     ## here filtering by timedelta
-    today = datetime.today()
-    weekago = today - week
-    twoweeksago = today - week - week
+
     mydataframe = mydataframe[mydataframe[6] > twoweeksago]
     mydataframe = mydataframe.values.tolist()
     return mydataframe, postids
@@ -113,6 +101,7 @@ def parse_post(post) -> list:
         parsed_post = [post_id, created_by, reposts, likes, views, text_of_post, local_time, count_of_comments]
     except Exception as e:
         # print('There\'s no created_by or some other parameter is this post')
+        logging.info('There is some post with no info about redach')
         logging.error(e)
         try:
             post_id = post['id']
@@ -120,7 +109,7 @@ def parse_post(post) -> list:
             reposts = post['reposts']['count']
             views = post['views']['count']
             text_of_post = post['text'][:20]
-            postdate = post['date'] #unix timestamp
+            postdate = post['date'] # unix timestamp
             unix_timestamp = float(postdate)
             count_of_comments = post['comments']['count']
             #local_timezone = tzlocal.get_localzone()  # get pytz timezone
@@ -130,6 +119,7 @@ def parse_post(post) -> list:
             logging.error('Post parsing failed with 2 ways')
             # print('Both ways to parse post were failed')
     return parsed_post
+
 
 def chunk(lst, n):
     for i in range (0, len(lst),n):
@@ -170,32 +160,20 @@ class Reporting:
     def __init__(self):
         pass
 
-    def _main(self):
-        """
-        .
-        """
-        creds = None
-        # The file token.pickle stores the user's access and refresh tokens, and is
-        # created automatically when the authorization flow completes for the first
-        # time.
-        if os.path.exists('token.pickle'):
-            with open('token.pickle', 'rb') as token:
-                creds = pickle.load(token)
-        # If there are no (valid) credentials available, let the user log in.
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
-                creds = flow.run_local_server(port=0)
-            # Save the credentials for the next run
-            with open('token.pickle', 'wb') as token:
-                pickle.dump(creds, token)
+    def auth(self):
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(
+            CREDSTOSERVICE,
+            ['https://www.googleapis.com/auth/spreadsheets',
+             'https://www.googleapis.com/auth/drive'])
+        httpauth = credentials.authorize(httplib2.Http())
+        service = apiclient.discovery.build('sheets', 'v4', http=httpauth)
 
-        service = build('sheets', 'v4', credentials=creds)
+        return service
 
-        # Call the Sheets API
+    @staticmethod
+    def get_values():
+
+        # FIXME: Refactoring
         sheet = service.spreadsheets()
         result = sheet.values().get(spreadsheetId=spreadsheet_id,
                                     range=range_name).execute()
@@ -207,11 +185,10 @@ class Reporting:
             logging.info('Failed to find posts in sheet')
         else:
             pass
-        return creds, posts_from_sheets
+        return posts_from_sheets
 
     @staticmethod
-    def put(result):
-        service = build('sheets', 'v4', credentials=creds)
+    def put_values():
         values = service.spreadsheets().values().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={
@@ -224,13 +201,13 @@ class Reporting:
             }
         ).execute()
 
+
     @staticmethod
     def put_last_updated():
         server_fixed_time = datetime.now() + delta
         d = str(datetime.date(server_fixed_time))
         t = str(datetime.time(server_fixed_time))
         stringest = ['Last Updated:', d, t]
-        service = build('sheets', 'v4', credentials=creds)
         values = service.spreadsheets().values().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={
@@ -283,9 +260,6 @@ class Statistics_work():
                  suffixes=('_x', '_y'), copy=True, indicator=False,
                  validate=None)
 
-        ## Check timedelta for 7 days
-
-
         result = result.sort_values(by=['postid'], ascending=False)
         result.datetimeofpost = result.datetimeofpost.astype(str)
         result = result.values.tolist()
@@ -296,26 +270,27 @@ if __name__ == '__main__':
     logger = logging.getLogger(log_file)
     logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file)
 
-    # for i in range (1, 3):
+
     vk_session = get_session()
     wall, tools = get_wall(vk_session)
     parsed, postids = parse_wall(wall)
     logger.info('VK parsed successfully')
-    # print("parsed VK is ok")
+
 
     morefeatures = supply_post_with_more_data(vk_session, postids)
     logger.info('Additional VK data parsed successfully')
-    # print("parsed additional data from VK is ok")
+
 
     r = Reporting()
-    creds, posts_from_sheets = r._main()
-
+    service = r.auth()
+    posts_from_sheets = r.get_values()
     logger.info('Google Sheets parsed successfully')
-    # print("parsed GS is ok")
+
+
     s = Statistics_work()
     result = s.compare(posts_from_sheets, parsed, morefeatures)
-    r.put(result)
+
+
+    r.put_values()
     r.put_last_updated()
-    logger.info('Process finished at {datetime.now() + delta}')
-    # print("All right, process is over at", datetime.now() + delta)
-    # time.sleep(t)
+    logger.info('Process finished at %s' % {datetime.now() + delta})
