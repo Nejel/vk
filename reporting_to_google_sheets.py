@@ -37,7 +37,7 @@ mememe = '26546404'
 jail = '-92767252'
 
 active_scan = bt
-count_of_executes = 5
+count_of_executes = 10
 
 
 def auth_handler():
