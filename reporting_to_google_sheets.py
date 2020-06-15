@@ -37,7 +37,7 @@ mememe = '26546404'
 jail = '-92767252'
 
 active_scan = bt
-count_of_executes = 10
+count_of_executes = 12 # 12 is probably enough for 2 weeks of posting
 
 
 def auth_handler():
