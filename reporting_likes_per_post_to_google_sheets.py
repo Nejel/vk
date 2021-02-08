@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# ! Don't forget to upgrade pip, heh
+
 import logging
 import httplib2
 from oauth2client.service_account import ServiceAccountCredentials
