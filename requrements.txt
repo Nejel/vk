@@ -1,5 +1,5 @@
-python = 3.5
 pickle
+numpy
 pandas
 google-api-core >= 1.17.0
 google-api-python-client >= 1.8.3
