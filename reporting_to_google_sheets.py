@@ -29,8 +29,8 @@ spreadsheet_id = sheet_id
 range_name = 'Sheet1!A3:H'
 
 # Logging
-FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
-log_file = 'google_reporting.log'
+# FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
+# log_file = 'google_reporting.log'
 
 bt = '-57536014'
 mememe = '26546404'
@@ -73,7 +73,8 @@ def parse_wall(wall):
         try:
             data.append(parse_post(post)) # only for post with created_by data
         except:
-            logging.error('Post parsing failed with 2 ways')
+            pass
+            # logging.error('Post parsing failed with 2 ways')
 
     mydataframe = pd.DataFrame(data)  #
     mydataframe.fillna(0, inplace=True)
@@ -101,8 +102,8 @@ def parse_post(post) -> list:
         parsed_post = [post_id, created_by, reposts, likes, views, text_of_post, local_time, count_of_comments]
     except Exception as e:
         # print('There\'s no created_by or some other parameter is this post')
-        logging.info('There is some post with no info about redach')
-        logging.error(e)
+        # logging.info('There is some post with no info about redach')
+        # logging.error(e)
         try:
             post_id = post['id']
             likes = post['likes']['count']
@@ -116,7 +117,8 @@ def parse_post(post) -> list:
             local_time = datetime.fromtimestamp(unix_timestamp) + delta
             parsed_post = [post_id, 0, reposts, likes, views, text_of_post, local_time, count_of_comments]
         except:
-            logging.error('Post parsing failed with 2 ways')
+            pass
+            # logging.error('Post parsing failed with 2 ways')
             # print('Both ways to parse post were failed')
     return parsed_post
 
@@ -147,10 +149,13 @@ def supply_post_with_more_data(vk_session, postids):
                 parsed_post.append(listoffeatures)
             except:
                 try:
+                    pass
                     # print("cannot add posts_enriched features for post: ", post['post_id'])
-                    logging.error('cannot add posts_enriched features for post {post["post_id"]}')
+                    # logging.error('cannot add posts_enriched features for post {post["post_id"]}')
+
                 except:
-                    logging.error('post_enriched features failed while taking post_id from list postids')
+                    pass
+                    # logging.error('post_enriched features failed while taking post_id from list postids')
                     # print("cannot add post_enriched features and even take post_id from list postids")
     return parsed_post
 
@@ -171,7 +176,7 @@ class Reporting:
         return service
 
     @staticmethod
-    def get_values():
+    def get_values(self, service, range_name):
 
         # FIXME: Refactoring
         sheet = service.spreadsheets()
@@ -181,14 +186,15 @@ class Reporting:
         posts_from_sheets = result.get('values', [])
 
         if not posts_from_sheets:
+            pass
             # print('No data found.')
-            logging.info('Failed to find posts in sheet')
+            # logging.info('Failed to find posts in sheet')
         else:
             pass
         return posts_from_sheets
 
     @staticmethod
-    def put_values():
+    def put_values(self):
         values = service.spreadsheets().values().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={
@@ -203,7 +209,7 @@ class Reporting:
 
 
     @staticmethod
-    def put_last_updated():
+    def put_last_updated(self):
         server_fixed_time = datetime.now() + delta
         d = str(datetime.date(server_fixed_time))
         t = str(datetime.time(server_fixed_time))
@@ -267,30 +273,30 @@ class Statistics_work():
 
 
 if __name__ == '__main__':
-    logger = logging.getLogger(log_file)
-    logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file)
+    # logger = logging.getLogger(log_file)
+    # logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file)
 
 
     vk_session = get_session()
     wall, tools = get_wall(vk_session)
     parsed, postids = parse_wall(wall)
-    logger.info('VK parsed successfully')
+    # logger.info('VK parsed successfully')
 
 
     morefeatures = supply_post_with_more_data(vk_session, postids)
-    logger.info('Additional VK data parsed successfully')
+    # logger.info('Additional VK data parsed successfully')
 
 
     r = Reporting()
     service = r.auth()
-    posts_from_sheets = r.get_values()
-    logger.info('Google Sheets parsed successfully')
+    posts_from_sheets = r.get_values(r, service, range_name)
+    # logger.info('Google Sheets parsed successfully')
 
 
     s = Statistics_work()
     result = s.compare(posts_from_sheets, parsed, morefeatures)
 
 
-    r.put_values()
-    r.put_last_updated()
-    logger.info('Process finished at %s' % {datetime.now() + delta})
+    r.put_values(r)
+    r.put_last_updated(r)
+    # logger.info('Process finished at %s' % {datetime.now() + delta})
