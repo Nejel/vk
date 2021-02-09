@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import logging
+from datetime import datetime, timedelta
 import httplib2
 from oauth2client.service_account import ServiceAccountCredentials
 import apiclient.discovery
 import pandas as pd
 import vk_api
-from secrets import login, password, sheet_id
-from datetime import datetime, timedelta
+from secrets import login, password, sheet_id, delta
 
-
-# Define timedeltas:
-from secrets import delta # 1 sec at local machine and 7 hours at productive stage
 today = datetime.today()
 week = timedelta(weeks=1)
 twoweeksago = today - week - week
@@ -40,124 +37,129 @@ active_scan = bt
 count_of_executes = 12 # 12 is probably enough for 2 weeks of posting
 
 
-def auth_handler():
-    key = input("Enter authentication code: ")
-    remember_device = True
-    return key, remember_device
+class Vkontakte:
 
-
-def get_session():
-    vk_session = vk_api.VkApi(
-        login, password,
-        auth_handler=auth_handler)
-
-    try:
-        vk_session.auth(token_only=True)
-    except vk_api.AuthError as error_msg:
+    def __init__(self):
         pass
-        # logging.error(error_msg)
-    return vk_session
+
+    def auth_handler(self):
+        key = input("Enter authentication code: ")
+        remember_device = True
+        return key, remember_device
 
 
-def get_wall(vk_session):
-    tools = vk_api.VkTools(vk_session)
-    wall = tools.get_all('wall.get', count_of_executes, {'owner_id': active_scan}, limit=1)
-    return wall, tools
+    def get_session(self):
+        vk_session = vk_api.VkApi(
+            login, password,
+            auth_handler=self.auth_handler)
 
-
-def parse_wall(wall):
-    data = []
-    postids = []
-    for post in wall["items"]:
-        postids.append(post['id'])
         try:
-            data.append(parse_post(post)) # only for post with created_by data
-        except:
+            vk_session.auth(token_only=True)
+        except vk_api.AuthError as error_msg:
             pass
-            # logging.error('Post parsing failed with 2 ways')
-
-    mydataframe = pd.DataFrame(data)  #
-    mydataframe.fillna(0, inplace=True)
-
-    ## here filtering by timedelta
-
-    mydataframe = mydataframe[mydataframe[6] > twoweeksago]
-    mydataframe = mydataframe.values.tolist()
-    return mydataframe, postids
+            # logging.error(error_msg)
+        return vk_session
 
 
-def parse_post(post) -> list:
-    try:
-        post_id = post['id']
-        created_by = post['created_by']
-        likes = post['likes']['count']
-        reposts = post['reposts']['count']
-        views = post['views']['count']
-        text_of_post = post['text'][:20]
-        postdate = post['date']
-        unix_timestamp = float(postdate)
-        count_of_comments = post['comments']['count']
-        #local_timezone = tzlocal.get_localzone()  # get pytz timezone
-        local_time = datetime.fromtimestamp(unix_timestamp) + delta
-        parsed_post = [post_id, created_by, reposts, likes, views, text_of_post, local_time, count_of_comments]
-    except Exception as e:
-        # print('There\'s no created_by or some other parameter is this post')
-        # logging.info('There is some post with no info about redach')
-        # logging.error(e)
+    def get_wall(self, vk_session):
+        tools = vk_api.VkTools(vk_session)
+        wall = tools.get_all('wall.get', count_of_executes, {'owner_id': active_scan}, limit=1)
+        return wall, tools
+
+
+    def parse_wall(self, wall):
+        data = []
+        postids = []
+        for post in wall["items"]:
+            postids.append(post['id'])
+            try:
+                data.append(self.parse_post(post)) # only for post with created_by data
+            except:
+                pass
+                # logging.error('Post parsing failed with 2 ways')
+
+        mydataframe = pd.DataFrame(data)  #
+        mydataframe.fillna(0, inplace=True)
+
+        ## here filtering by timedelta
+
+        mydataframe = mydataframe[mydataframe[6] > twoweeksago]
+        mydataframe = mydataframe.values.tolist()
+        return mydataframe, postids
+
+
+    def parse_post(self, post) -> list:
         try:
             post_id = post['id']
+            created_by = post['created_by']
             likes = post['likes']['count']
             reposts = post['reposts']['count']
             views = post['views']['count']
             text_of_post = post['text'][:20]
-            postdate = post['date'] # unix timestamp
+            postdate = post['date']
             unix_timestamp = float(postdate)
             count_of_comments = post['comments']['count']
             #local_timezone = tzlocal.get_localzone()  # get pytz timezone
             local_time = datetime.fromtimestamp(unix_timestamp) + delta
-            parsed_post = [post_id, 0, reposts, likes, views, text_of_post, local_time, count_of_comments]
-        except:
-            pass
-            # logging.error('Post parsing failed with 2 ways')
-            # print('Both ways to parse post were failed')
-    return parsed_post
-
-
-def chunk(lst, n):
-    for i in range (0, len(lst),n):
-        yield lst[i:i+n]
-
-
-def supply_post_with_more_data(vk_session, postids):
-    chunks = chunk(postids, 30)
-    vk = vk_session.get_api()
-    parsed_post = []
-    for postids_group in chunks:
-        posts_enriched = vk.stats.getPostReach(owner_id=active_scan, post_ids=postids_group)
-        for post in posts_enriched:
+            parsed_post = [post_id, created_by, reposts, likes, views, text_of_post, local_time, count_of_comments]
+        except Exception as e:
+            # print('There\'s no created_by or some other parameter is this post')
+            # logging.info('There is some post with no info about redach')
+            # logging.error(e)
             try:
-                post_id = post['post_id']
-                hide = post['hide']
-                join_group = post['join_group']
-                links = post['links']
-                reach_subscribers = post['reach_subscribers']
-                to_group = post['to_group']
-                reach_viral = post['reach_viral']
-                report = post['report']
-                unsubscribe = post['unsubscribe']
-                listoffeatures = [post_id, hide, join_group, links, reach_subscribers, to_group, reach_viral, report, unsubscribe]
-                parsed_post.append(listoffeatures)
+                post_id = post['id']
+                likes = post['likes']['count']
+                reposts = post['reposts']['count']
+                views = post['views']['count']
+                text_of_post = post['text'][:20]
+                postdate = post['date'] # unix timestamp
+                unix_timestamp = float(postdate)
+                count_of_comments = post['comments']['count']
+                #local_timezone = tzlocal.get_localzone()  # get pytz timezone
+                local_time = datetime.fromtimestamp(unix_timestamp) + delta
+                parsed_post = [post_id, 0, reposts, likes, views, text_of_post, local_time, count_of_comments]
             except:
-                try:
-                    pass
-                    # print("cannot add posts_enriched features for post: ", post['post_id'])
-                    # logging.error('cannot add posts_enriched features for post {post["post_id"]}')
+                pass
+                # logging.error('Post parsing failed with 2 ways')
+                # print('Both ways to parse post were failed')
+        return parsed_post
 
+
+    def chunk(self, lst, n):
+        for i in range (0, len(lst),n):
+            yield lst[i:i+n]
+
+
+    def supply_post_with_more_data(self, vk_session, postids):
+        chunks = self.chunk(postids, 30)
+        vk = vk_session.get_api()
+        parsed_post = []
+        for postids_group in chunks:
+            posts_enriched = vk.stats.getPostReach(owner_id=active_scan, post_ids=postids_group)
+            for post in posts_enriched:
+                try:
+                    post_id = post['post_id']
+                    hide = post['hide']
+                    join_group = post['join_group']
+                    links = post['links']
+                    reach_subscribers = post['reach_subscribers']
+                    to_group = post['to_group']
+                    reach_viral = post['reach_viral']
+                    report = post['report']
+                    unsubscribe = post['unsubscribe']
+                    listoffeatures = [post_id, hide, join_group, links, reach_subscribers, to_group, reach_viral, report, unsubscribe]
+                    parsed_post.append(listoffeatures)
                 except:
-                    pass
-                    # logging.error('post_enriched features failed while taking post_id from list postids')
-                    # print("cannot add post_enriched features and even take post_id from list postids")
-    return parsed_post
+                    try:
+                        pass
+                        # print("cannot add posts_enriched features for post: ", post['post_id'])
+                        # logging.error('cannot add posts_enriched features for post {post["post_id"]}')
+
+                    except:
+                        pass
+                        # logging.error('post_enriched features failed while taking post_id from list postids')
+                        # print("cannot add post_enriched features and even take post_id from list postids")
+        return parsed_post
 
 
 class Reporting:
@@ -275,15 +277,15 @@ class Statistics_work():
 if __name__ == '__main__':
     # logger = logging.getLogger(log_file)
     # logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file)
+    vk = Vkontakte()
 
-
-    vk_session = get_session()
-    wall, tools = get_wall(vk_session)
-    parsed, postids = parse_wall(wall)
+    vk_session = vk.get_session()
+    wall, tools = vk.get_wall(vk_session)
+    parsed, postids = vk.parse_wall(wall)
     # logger.info('VK parsed successfully')
 
 
-    morefeatures = supply_post_with_more_data(vk_session, postids)
+    morefeatures = vk.supply_post_with_more_data(vk_session, postids)
     # logger.info('Additional VK data parsed successfully')
 
 
