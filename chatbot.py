@@ -7,7 +7,14 @@
 
 Предполагается на постановку на ежесуточный автозапуск.
 
+TODO:
+    1. Добавить функционал отправки таблицы "топ-5 лучших редакторов на текущий момент" раз в неделю (в воскресенье).
+    2.
+
+
 """
+
+
 import datetime
 import random
 from telegram.bot import Bot
@@ -18,7 +25,7 @@ from secrets import tg_token, chat_id
 # CREDENTIALS TO SERVICE ACC
 CREDSTOSERVICE = 'credentials.json'
 
-buzz = ('мужчина', 'парниша', 'любовник', 'редактор', 'гномик')
+buzz = ('мужчина,', 'парниша,', 'любовник,', 'редактор,', 'гномик,')
 adjectives = ('полный', 'современный', 'самостоятельный', 'знатный', 'полноценный')
 adverbs = ('знатно', 'всеобъемлюще', 'последовательно', 'значимо', 'серьезно')
 verbs = ('улучшающий работу БТ', 'характеризующий эту конфу', 'влияющий на нас', 'влюбленный в себя')
@@ -92,5 +99,5 @@ if __name__ == '__main__':
                     f"{text_to_send}{editor_name[0][0]}.\n{editor_name[0][0]}, ты сегодня "
                     f"{phrase_of_day}"
                 )
-
+    #print(text_to_bot)
     Bot(token=tg_token).send_message(chat_id=chat_id, text=text_to_bot)
