@@ -303,6 +303,11 @@ class Insta:
 
         df['Date'] = pd.to_datetime(df['Date'], unit='s', origin='unix')
 
+        """"
+        Here should be date format:
+        Or not
+        """
+
         return df
 
 
@@ -360,8 +365,12 @@ class DF_works:
                  validate=None)
 
         result = result.sort_values(by=['postid'], ascending=False)
-        result.datetimeofpost = result.datetimeofpost.astype(str)
+
+        result['datetimeofpost'] = pd.to_datetime(result['datetimeofpost'])
+        result['datetimeofpost'] = result.datetimeofpost.dt\
+                                .strftime('%Y-%m-%d').astype(str)
         result = result.values.tolist()
+
         return result
 
 
