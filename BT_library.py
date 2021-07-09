@@ -302,11 +302,7 @@ class Insta:
                            ignore_index=True)
 
         df['Date'] = pd.to_datetime(df['Date'], unit='s', origin='unix')
-
-        """"
-        Here should be date format:
-        Or not
-        """
+        df['Date'] = df.Date.dt.strftime('%Y-%m-%d').astype('datetime64[ns]')
 
         return df
 
